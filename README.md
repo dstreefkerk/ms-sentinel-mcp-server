@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/dstreefkerk-ms-sentinel-mcp-server-badge.png)](https://mseep.ai/app/dstreefkerk-ms-sentinel-mcp-server)
+
 # Microsoft Sentinel MCP Server
 
 A [Model Context Protocol][mcp] (MCP) server for Microsoft Sentinel. This server enables read-only access to a Microsoft Sentinel instance, including advanced querying, incident viewing, and resource exploration for Azure Sentinel environments. It provides a modular and extensible platform for observation-only security operations and analysis.
