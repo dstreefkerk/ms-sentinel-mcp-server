@@ -78,6 +78,20 @@ Just remember that if you're using Azure CLI auth, you need to remove
 
 ---
 
+## 📚 Documentation
+
+### Quick Start Guides
+- **[LLM Quick Start Guide](LLM_QUICKSTART.md)** - Essential guide for LLM interaction (replaces auto-generated llms.txt)
+- **[Documentation Navigation](docs/DOCUMENTATION_GUIDE.md)** - Find the right documentation quickly
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** - Tool categories and common patterns
+
+### Detailed Guides  
+- **[LLM Instructions](docs/llm_instructions.md)** - Comprehensive workflows and best practices
+- **[System Overview](docs/SYSTEM_OVERVIEW.md)** - Architecture and component relationships
+- **[Architecture Documentation](docs/architecture/)** - Detailed technical specifications
+
+---
+
 ## 🧰 Tool Reference
 
 Below are the available tools. For full documentation, see the `resources/tool_docs/` directory. Tool names and descriptions are kept in sync with the MCP server's tool registry, so that the MCP Client can retrieve them.
