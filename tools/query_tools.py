@@ -14,7 +14,7 @@ import re
 import time
 import json
 from datetime import timedelta, datetime, date
-from typing import List, Dict
+from typing import List, Dict, Optional, Tuple
 from mcp.server.fastmcp import Context, FastMCP
 from tools.base import (
     MCPToolBase,
@@ -24,6 +24,174 @@ from utilities.task_manager import (
 )  # May show import error in some test runners
 
 # pylint: disable=too-few-public-methods, too-many-return-statements, too-many-branches, too-many-locals
+
+
+def parse_timespan(timespan: str) -> Tuple[Optional[timedelta], Optional[str]]:
+    """
+    Parse a timespan string into a timedelta object.
+
+    Supports multiple formats:
+    - Simple format: '1d', '12h', '30m', '90d'
+    - ISO 8601 duration: 'P90D', 'PT4H', 'P1DT12H', 'PT30M'
+
+    Args:
+        timespan: Timespan string to parse
+
+    Returns:
+        Tuple of (timedelta object or None, error message or None)
+    """
+    if not timespan:
+        return None, "Empty timespan provided"
+
+    timespan = timespan.strip()
+
+    # Try ISO 8601 duration format first (starts with 'P')
+    if timespan.upper().startswith('P'):
+        return _parse_iso8601_duration(timespan)
+
+    # Try simple format (e.g., '90d', '12h', '30m')
+    return _parse_simple_timespan(timespan)
+
+
+def _parse_iso8601_duration(duration: str) -> Tuple[Optional[timedelta], Optional[str]]:
+    """
+    Parse an ISO 8601 duration string into a timedelta.
+
+    Supports formats like:
+    - P90D (90 days)
+    - PT4H (4 hours)
+    - PT30M (30 minutes)
+    - PT45S (45 seconds)
+    - P1DT12H (1 day, 12 hours)
+    - P7DT6H30M (7 days, 6 hours, 30 minutes)
+
+    Args:
+        duration: ISO 8601 duration string (must start with 'P')
+
+    Returns:
+        Tuple of (timedelta object or None, error message or None)
+    """
+    # ISO 8601 duration regex pattern
+    # P[n]Y[n]M[n]DT[n]H[n]M[n]S - we support days, hours, minutes, seconds
+    pattern = r'^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$'
+    match = re.match(pattern, duration.upper())
+
+    if not match:
+        # Try alternate patterns for common variations
+        # PT only format (no days)
+        pt_pattern = r'^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$'
+        pt_match = re.match(pt_pattern, duration.upper())
+        if pt_match:
+            hours = int(pt_match.group(1)) if pt_match.group(1) else 0
+            minutes = int(pt_match.group(2)) if pt_match.group(2) else 0
+            seconds = int(pt_match.group(3)) if pt_match.group(3) else 0
+            return timedelta(hours=hours, minutes=minutes, seconds=seconds), None
+
+        return None, f"Invalid ISO 8601 duration format: '{duration}'. Expected format like P90D, PT4H, P1DT12H"
+
+    days = int(match.group(1)) if match.group(1) else 0
+    hours = int(match.group(2)) if match.group(2) else 0
+    minutes = int(match.group(3)) if match.group(3) else 0
+    seconds = int(match.group(4)) if match.group(4) else 0
+
+    # Validate that at least one component was specified
+    if days == 0 and hours == 0 and minutes == 0 and seconds == 0:
+        return None, f"Invalid ISO 8601 duration: '{duration}' specifies zero duration"
+
+    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds), None
+
+
+def _parse_simple_timespan(timespan: str) -> Tuple[Optional[timedelta], Optional[str]]:
+    """
+    Parse a simple timespan format into a timedelta.
+
+    Supports formats like:
+    - 90d (90 days)
+    - 12h (12 hours)
+    - 30m (30 minutes)
+
+    Args:
+        timespan: Simple timespan string
+
+    Returns:
+        Tuple of (timedelta object or None, error message or None)
+    """
+    timespan_lower = timespan.lower()
+
+    # Match pattern: number followed by unit (d, h, m)
+    match = re.match(r'^(\d+)([dhm])$', timespan_lower)
+    if not match:
+        return None, f"Invalid timespan format: '{timespan}'. Use formats like '90d', '12h', '30m', or ISO 8601 like 'P90D', 'PT4H'"
+
+    value = int(match.group(1))
+    unit = match.group(2)
+
+    if value <= 0:
+        return None, f"Timespan value must be positive, got: {value}"
+
+    if unit == 'd':
+        return timedelta(days=value), None
+    elif unit == 'h':
+        return timedelta(hours=value), None
+    elif unit == 'm':
+        return timedelta(minutes=value), None
+
+    return None, f"Unknown timespan unit: '{unit}'"
+
+
+def detect_query_timespan(query: str) -> Optional[int]:
+    """
+    Detect time-based filters in a KQL query and return the largest timespan in days.
+
+    Looks for patterns like:
+    - ago(90d), ago(30d), ago(7d)
+    - ago(24h), ago(12h)
+    - TimeGenerated >= datetime(...)
+    - TimeGenerated > ago(...)
+
+    Args:
+        query: The KQL query string
+
+    Returns:
+        The detected timespan in days, or None if no time filter detected
+    """
+    max_days = None
+
+    # Pattern 1: ago(Nd) or ago(Nh) or ago(Nm)
+    ago_pattern = r'ago\s*\(\s*(\d+)\s*([dhm])\s*\)'
+    for match in re.finditer(ago_pattern, query, re.IGNORECASE):
+        value = int(match.group(1))
+        unit = match.group(2).lower()
+        days = 1  # Default
+
+        if unit == 'd':
+            days = value
+        elif unit == 'h':
+            days = max(1, value // 24)  # Convert hours to days, minimum 1
+        elif unit == 'm':
+            days = 1  # Minutes = at least 1 day
+
+        if max_days is None or days > max_days:
+            max_days = days
+
+    # Pattern 2: startofday(ago(Nd)) or similar
+    startof_pattern = r'startof\w+\s*\(\s*ago\s*\(\s*(\d+)\s*([dhm])\s*\)\s*\)'
+    for match in re.finditer(startof_pattern, query, re.IGNORECASE):
+        value = int(match.group(1))
+        unit = match.group(2).lower()
+        days = 1  # Default
+
+        if unit == 'd':
+            days = value
+        elif unit == 'h':
+            days = max(1, value // 24)
+        elif unit == 'm':
+            days = 1
+
+        if max_days is None or days > max_days:
+            max_days = days
+
+    return max_days
 
 
 class SentinelLogsSearchTool(MCPToolBase):
@@ -49,7 +217,7 @@ class SentinelLogsSearchTool(MCPToolBase):
         """
         # Extract parameters using the centralized parameter extraction from MCPToolBase
         query = self._extract_param(kwargs, "query")
-        timespan = self._extract_param(kwargs, "timespan", "1d")
+        timespan = self._extract_param(kwargs, "timespan", None)  # No default - will auto-detect
         logger = self.logger
         if not query:
             logger.error("Missing required parameter: query")
@@ -96,26 +264,53 @@ class SentinelLogsSearchTool(MCPToolBase):
         timespan_obj = None
         try:
             if timespan:
-                if timespan.endswith("d"):
-                    timespan_obj = timedelta(days=int(timespan[:-1]))
-                elif timespan.endswith("h"):
-                    timespan_obj = timedelta(hours=int(timespan[:-1]))
-                elif timespan.endswith("m"):
-                    timespan_obj = timedelta(minutes=int(timespan[:-1]))
+                # User explicitly provided a timespan - parse it
+                timespan_obj, parse_error = parse_timespan(timespan)
+                if parse_error:
+                    logger.error("Invalid timespan format: %s", parse_error)
+                    return {
+                        "valid": False,
+                        "error": parse_error,
+                        "result_count": 0,
+                        "columns": [],
+                        "rows": [],
+                        "warnings": [parse_error],
+                        "message": parse_error,
+                    }
+                logger.info(f"Parsed timespan '{timespan}' to {timespan_obj}")
+            else:
+                # No timespan provided - try to auto-detect from query
+                detected_days = detect_query_timespan(query)
+                if detected_days:
+                    # Add a small buffer (10%) to ensure we don't miss edge data
+                    buffer_days = max(1, detected_days // 10)
+                    total_days = detected_days + buffer_days
+                    timespan_obj = timedelta(days=total_days)
+                    logger.info(
+                        f"Auto-detected timespan from query: {detected_days} days "
+                        f"(using {total_days} days with buffer)"
+                    )
                 else:
-                    timespan_obj = timedelta(days=1)  # noqa: E501
+                    # No time filter in query - use conservative default of 7 days
+                    # This prevents expensive queries while still providing useful data
+                    timespan_obj = timedelta(days=7)
+                    logger.info(
+                        "No timespan provided and no time filter detected in query. "
+                        "Using default of 7 days. Specify timespan or add ago() to query for longer ranges."
+                    )
         except Exception as e:
             logger.error("Invalid timespan format: %s", e)
             return {
+                "valid": False,
                 "error": (
-                    "Invalid timespan format: %s. Use format like '1d', '12h', or '30m'."
-                    % str(e)
+                    f"Invalid timespan format: {e}. Use formats like '90d', '12h', '30m', "
+                    "or ISO 8601 like 'P90D', 'PT4H', 'P1DT12H'."
                 ),
                 "result_count": 0,
                 "columns": [],
                 "rows": [],
-                "warnings": ["Invalid timespan format: %s" % str(e)],
-                "message": "Invalid timespan format: %s" % str(e),
+                "warnings": [f"Invalid timespan format: {e}"],
+                "message": f"Invalid timespan format: {e}",
             }
 
         warnings = []
