@@ -4,6 +4,8 @@
 
 A [Model Context Protocol][mcp] (MCP) server for Microsoft Sentinel. This server enables read-only access to a Microsoft Sentinel instance, including advanced querying, incident viewing, and resource exploration for Azure Sentinel environments. It provides a modular and extensible platform for observation-only security operations and analysis.
 
+Microsoft have now released their own Sentinel MCP. Check it out here: [https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started?tabs=visual-studio](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started?tabs=visual-studio)
+
 ---
 
 ## ⚠️ IMPORTANT SECURITY NOTICE ⚠️
