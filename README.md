@@ -1,5 +1,3 @@
-[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/cd962876-444b-4626-b533-9d75e45053e0)
-
 # Microsoft Sentinel MCP Server
 
 > ## 🗄️ This repository is archived and no longer maintained
