@@ -2,9 +2,16 @@
 
 # Microsoft Sentinel MCP Server
 
-A [Model Context Protocol][mcp] (MCP) server for Microsoft Sentinel. This server enables read-only access to a Microsoft Sentinel instance, including advanced querying, incident viewing, and resource exploration for Azure Sentinel environments. It provides a modular and extensible platform for observation-only security operations and analysis.
+> ## 🗄️ This repository is archived and no longer maintained
+>
+> **Microsoft has released an official, hosted Sentinel MCP server — use that instead:**
+> [Get started with the Sentinel MCP server](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started?tabs=visual-studio)
+>
+> This project was always intended for test environments only (read-only, experimental). It is kept available for reference, but it receives no further updates, bug fixes, or security patches. Do not use it against production tenants.
 
-Microsoft have now released their own Sentinel MCP. Check it out here: [https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started?tabs=visual-studio](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started?tabs=visual-studio)
+---
+
+A [Model Context Protocol][mcp] (MCP) server for Microsoft Sentinel. This server enables read-only access to a Microsoft Sentinel instance, including advanced querying, incident viewing, and resource exploration for Azure Sentinel environments. It provides a modular and extensible platform for observation-only security operations and analysis.
 
 ---
 
@@ -201,6 +208,11 @@ If you prefer to set up the environment manually:
    **SSE Mode (for IDEs):**
    ```bash
    python wrapper.py --sse
+   ```
+
+   The SSE transport binds to `127.0.0.1` (loopback only) by default and has **no authentication** — anyone who can reach the port can invoke the tools with your Azure identity. Only bind it to a non-loopback interface on a trusted, isolated network, and only as an explicit opt-in:
+   ```bash
+   python wrapper.py --sse --host 0.0.0.0   # WARNING: unauthenticated, exposes your Azure identity
    ```
 
 ### Inspector UI

@@ -65,10 +65,26 @@ if __name__ == "__main__":
         default=8000,
         help="Port for SSE server (default: 8000)",
     )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "Host/interface for SSE server (default: 127.0.0.1, loopback only). "
+            "The SSE transport has NO authentication and exposes the privileged "
+            "Azure identity to anyone who can reach the port. Only bind to a "
+            "non-loopback interface (e.g. 0.0.0.0) on a trusted, isolated network."
+        ),
+    )
     args = parser.parse_args()
     print("Starting MCP server...")
     if args.sse:
-        print(f"Launching in SSE mode on port {args.port}")
+        print(f"Launching in SSE mode on {args.host}:{args.port}")
+        if args.host not in ("127.0.0.1", "localhost", "::1"):
+            print(
+                f"[wrapper] WARNING: binding SSE to non-loopback host '{args.host}'. "
+                "The SSE transport is unauthenticated and grants credential-free "
+                "access to your Azure identity. Only do this on a trusted network."
+            )
         try:
             import uvicorn
         except ImportError:
@@ -78,7 +94,7 @@ if __name__ == "__main__":
             )
             sys.exit(1)
 
-        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=args.port, log_level="info")
+        uvicorn.run(mcp.sse_app(), host=args.host, port=args.port, log_level="info")
     else:
         print("Launching in STDIO (JSON-RPC) mode")
 
